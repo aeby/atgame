@@ -1,20 +1,31 @@
 'use strict';
 
-window.requestAnimFrame = (function (callback) {
-    return window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame ||
-        function (callback) {
-            window.setTimeout(callback, 1000 / 60);
-        };
-})();
+(function () {
+    var lastTime = 0;
+    var vendors = ['ms', 'moz', 'webkit', 'o'];
+    for (var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+        window.requestAnimationFrame = window[vendors[x] + 'RequestAnimationFrame'];
+        window.cancelAnimationFrame = window[vendors[x] + 'CancelAnimationFrame']
+            || window[vendors[x] + 'CancelRequestAnimationFrame'];
+    }
 
-/*
-var stats = new Stats();
-stats.setMode(0);
-stats.domElement.style.position = 'absolute';
-stats.domElement.style.left = '0px';
-stats.domElement.style.top = '0px';
-document.body.appendChild(stats.domElement);
-*/
+    if (!window.requestAnimationFrame)
+        window.requestAnimationFrame = function (callback, element) {
+            var currTime = new Date().getTime();
+            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+            var id = window.setTimeout(function () {
+                                           callback(currTime + timeToCall);
+                                       },
+                                       timeToCall);
+            lastTime = currTime + timeToCall;
+            return id;
+        };
+
+    if (!window.cancelAnimationFrame)
+        window.cancelAnimationFrame = function (id) {
+            clearTimeout(id);
+        };
+}());
 
 var atg = {
     w: 0,
@@ -24,56 +35,65 @@ var atg = {
     canDrop: null,
     ctxDrop: null,
     touchStart: false,
-    logo: null
+    logo: null,
+    logoW: 0,
+    logoH: 0,
+    logoOffsetX: 0,
+    dotBorder: 2,
+    logoDots: [
+        {x: 270, y: 0, r: 25, c: '#003366'},
+        {x: 185, y: 30, r: 36, c: '#3366FF'},
+        {x: 82, y: 93, r: 47, c: '#33CCCC'},
+        {x: 195, y: 121, r: 25, c: '#99CC00'},
+        {x: 0, y: 182, r: 60, c: '#004300'},
+        {x: 135, y: 192, r: 45, c: '#008000'},
+        {x: 212, y: 276, r: 58, c: '#FFCC00'},
+        {x: 44, y: 304, r: 80, c: '#FF9900'},
+        {x: 190, y: 415, r: 72, c: '#FF6600'},
+        {x: 340, y: 300, r: 90, c: '#993300'}
+    ],
+    scaledLogoDots: [],
+    runningDrops: [],
+    logoScale: 1,
+    loop: null
 };
 
 atg.updateLogo = function () {
-    var scale = atg.h * 0.33 / 560,
-        borderWidth = 2,
-        borderOff = borderWidth / 2,
-        canv = document.createElement('canvas'),
-        p1 = {x: 270, y: 0, r: 25, c: '#003366', h: false},
-        p2 = {x: 185, y: 30, r: 36, c: '#3366FF', h: false},
-        p3 = {x: 82, y: 93, r: 47, c: '#33CCCC', h: false},
-        p4 = {x: 195, y: 121, r: 25, c: '#004300', h: false},
-        p5 = {x: 0, y: 182, r: 60, c: '#99CC00', h: false},
-        p6 = {x: 135, y: 192, r: 45, c: '#008000', h: false},
-        p7 = {x: 212, y: 276, r: 58, c: '#FFCC00', h: false},
-        p8 = {x: 44, y: 304, r: 80, c: '#FF9900', h: false},
-        p9 = {x: 190, y: 415, r: 72, c: '#FF6600', h: false},
-        p10 = {x: 340, y: 300, r: 90, c: '#993300', h: false};
+    var borderOff = atg.dotBorder / 2,
+        canv = document.createElement('canvas');
 
-    canv.width = ~~(520 * scale) + borderWidth;
-    canv.height = ~~(560 * scale) + borderWidth;
+    canv.width = atg.logoW;
+    canv.height = atg.logoH;
     var ctx = canv.getContext('2d');
 
-    atg.logoY = atg.h - canv.height - 48;
+    atg.logoOffsetY = atg.h - canv.height - 48;
 
-    var points = [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10];
+    ctx.lineWidth = atg.dotBorder;
 
-    ctx.lineWidth = borderWidth;
-
-    for (var i = 0; i < points.length; i++) {
-        var point = points[i],
-            px = ~~(point.x * scale),
-            py = ~~(point.y * scale),
-            pr = ~~(point.r * scale);
-        if(point.h){
+    for (var i = 0; i < atg.scaledLogoDots.length; i++) {
+        var point = atg.scaledLogoDots[i];
+        if (point.h) {
             ctx.fillStyle = point.c;
-        }else{
+        } else {
             ctx.strokeStyle = point.c;
         }
         ctx.beginPath();
-        ctx.arc(px + pr + borderOff, py + pr + borderOff, pr, 0, 2 * Math.PI, false);
-        if(point.h){
+        ctx.arc(point.x + point.r + borderOff, point.y + point.r + borderOff, point.r, 0, 2 * Math.PI, false);
+        if (point.h) {
             ctx.fill();
-        }else{
+        } else {
             ctx.stroke();
         }
     }
 
     atg.logo = canv;
 };
+
+atg.drawUpdateLogo = function () {
+    atg.updateLogo();
+    atg.ctxMove.clearRect(0, 0, atg.w, atg.h);
+    atg.ctxMove.drawImage(atg.logo, atg.logoOffsetX, atg.logoOffsetY);
+}
 
 
 atg.startMove = function () {
@@ -89,7 +109,8 @@ atg.moveLogo = function (e) {
     if (atg.touchStart) {
         // todo: clear only last region
         atg.ctxMove.clearRect(0, 0, atg.w, atg.h);
-        atg.ctxMove.drawImage(atg.logo, ~~(e.clientX * atg.moveFactor) - atg.logo.width - 48, atg.logoY);
+        atg.logoOffsetX = ~~(e.clientX * atg.moveFactor) - atg.logo.width - 48;
+        atg.ctxMove.drawImage(atg.logo, atg.logoOffsetX, atg.logoOffsetY);
     }
 };
 
@@ -106,19 +127,65 @@ atg.collision = function (p1x, p1y, r1, p2x, p2y, r2) {
     }
 }
 
-function animate(canvas, context, startTime) {
-    stats.begin();
+atg.run = function (canvas, ctx) {
 
-    context.beginPath();
-    context.rect(0, 0, 200, 200);
-    context.fillStyle = '#0000FF';
-    context.fill();
+    // remove old dots
+    var len = atg.runningDrops.length;
+    while (len--) {
+        var dd = atg.runningDrops[len];
+        if (dd.y > atg.h) {
+            atg.runningDrops.splice(len, 1)
+        }
+    }
 
-    stats.end();
+    // check for collision
+    var runningDropIndex = atg.runningDrops.length;
+    while (runningDropIndex--) {
+        var runningDrop = atg.runningDrops[runningDropIndex];
+        for (var scaledDropIndex = 0; scaledDropIndex < atg.scaledLogoDots.length; scaledDropIndex++) {
+            var scaledDrop = atg.scaledLogoDots[scaledDropIndex],
+                sdx = scaledDrop.x + atg.logoOffsetX + scaledDrop.r,
+                sdy = scaledDrop.y + atg.logoOffsetY + scaledDrop.r;
+            if (atg.collision(runningDrop.x, runningDrop.y, runningDrop.r, sdx, sdy, scaledDrop.r)) {
+                // check if color matches
+                if (scaledDrop.c === runningDrop.c) {
+                    scaledDrop.h = true;
+                    atg.drawUpdateLogo();
+                    atg.runningDrops.splice(runningDropIndex, 1);
+                } else if (scaledDrop.h) {
+                    scaledDrop.h = false;
+                    atg.drawUpdateLogo();
+                    atg.runningDrops.splice(runningDropIndex, 1);
+                }
 
-    // request new frame
-    requestAnimFrame(function () {
-        animate(canvas, context, startTime);
+            }
+        }
+    }
+
+    // clear previous dots
+    ctx.clearRect(0, 0, atg.w, atg.h);
+    //for(var cd=0; cd < atg.runningDrops.length; cd++){
+    //    //ctx.clearRect(0, 0, atg.w, atg.h);
+    //}
+
+    // move dots
+    for (var rd = 0; rd < atg.runningDrops.length; rd++) {
+        var dot = atg.runningDrops[rd];
+        dot.y += 0.8;
+        ctx.fillStyle = dot.c;
+        ctx.beginPath();
+        ctx.arc(dot.x, ~~dot.y, ~~(dot.r * atg.logoScale), 0, 2 * Math.PI, false);
+        ctx.fill();
+    }
+
+    if (~~(Math.random() * (200 - atg.w * 0.08)) <= 0) {
+        var ds = atg.scaledLogoDots[~~(Math.random() * atg.scaledLogoDots.length)],
+            x = ds.r + 5 + Math.random() * (atg.w - 10 - ds.r * 2);
+        atg.runningDrops.push({x: ~~x, y: -20, r: ds.r, c: ds.c});
+    }
+
+    atg.loop = requestAnimationFrame(function () {
+        atg.run(canvas, ctx);
     });
 }
 
@@ -129,20 +196,37 @@ $(document).ready(function () {
     atg.canDrop = $('#drop');
     atg.ctxDrop = atg.canDrop.get(0).getContext('2d');
 
-    function respondCanvas() {
+    function initGame() {
+        if (atg.loop) {
+            window.cancelAnimationFrame(atg.loop);
+        }
         atg.w = $(window).width();
         atg.h = $(window).height();
+        var dotScale = atg.h * 0.33 / 560;
+        atg.scaledLogoDots = [];
+        // scale logo dots
+        for (var ld = 0; ld < atg.logoDots.length; ld++) {
+            var lDot = atg.logoDots[ld];
+            atg.scaledLogoDots.push({x: ~~(lDot.x * dotScale), y: ~~(lDot.y * dotScale), r: ~~(lDot.r * dotScale), c: lDot.c, h: false});
+        }
+
+        atg.logoW = ~~(520 * dotScale) + atg.dotBorder;
+        atg.logoH = ~~(560 * dotScale) + atg.dotBorder;
+
         atg.updateLogo();
         atg.moveFactor = (atg.w + atg.logo.width + 48) / atg.w;
         atg.canMove.attr('width', atg.w).attr('height', atg.h);
         atg.canDrop.attr('width', atg.w).attr('height', atg.h);
         atg.ctxMove.clearRect(0, 0, atg.w, atg.h);
-        atg.ctxMove.drawImage(atg.logo, ~~(atg.w / 2.0) - ~~(atg.logo.width / 2.0), atg.logoY);
+        atg.logoOffsetX = ~~(atg.w / 2.0) - ~~(atg.logo.width / 2.0);
+        atg.drawUpdateLogo();
+        atg.runningDrops = [];
+        atg.run(atg.canDrop, atg.ctxDrop);
     }
 
-    $(window).resize(respondCanvas);
+    $(window).resize(initGame);
 
-    respondCanvas();
+    initGame();
 
     var c = $("body").get(0);
     c.addEventListener('PointerDown', atg.startMove, false);
