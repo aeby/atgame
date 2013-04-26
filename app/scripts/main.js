@@ -1,30 +1,31 @@
 'use strict';
 
 (function () {
-    var lastTime = 0;
-    var vendors = ['ms', 'moz', 'webkit', 'o'];
-    for (var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+    var lastTime = 0,
+        vendors = ['ms', 'moz', 'webkit', 'o'],
+        x;
+    for (x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
         window.requestAnimationFrame = window[vendors[x] + 'RequestAnimationFrame'];
-        window.cancelAnimationFrame = window[vendors[x] + 'CancelAnimationFrame']
-            || window[vendors[x] + 'CancelRequestAnimationFrame'];
+        window.cancelAnimationFrame = window[vendors[x] + 'CancelAnimationFrame'] || window[vendors[x] + 'CancelRequestAnimationFrame'];
     }
 
-    if (!window.requestAnimationFrame)
-        window.requestAnimationFrame = function (callback, element) {
-            var currTime = new Date().getTime();
-            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
-            var id = window.setTimeout(function () {
-                                           callback(currTime + timeToCall);
-                                       },
-                                       timeToCall);
+    if (!window.requestAnimationFrame) {
+        window.requestAnimationFrame = function (callback) {
+            var currTime = new Date().getTime(),
+                timeToCall = Math.max(0, 16 - (currTime - lastTime)),
+                id = window.setTimeout(function () {
+                    callback(currTime + timeToCall);
+                }, timeToCall);
             lastTime = currTime + timeToCall;
             return id;
         };
+    }
 
-    if (!window.cancelAnimationFrame)
+    if (!window.cancelAnimationFrame) {
         window.cancelAnimationFrame = function (id) {
             clearTimeout(id);
         };
+    }
 }());
 
 var atg = {
@@ -35,10 +36,12 @@ var atg = {
     canDrop: null,
     ctxDrop: null,
     touchStart: false,
+    touchSpeed: 1.2,
     logo: null,
     logoW: 0,
     logoH: 0,
     logoOffsetX: 0,
+    logoOffsetY: 0,
     dotBorder: 2,
     logoDots: [
         {x: 270, y: 0, r: 25, c: '#003366'},
@@ -55,23 +58,25 @@ var atg = {
     scaledLogoDots: [],
     runningDrops: [],
     logoScale: 1,
-    loop: null
+    loop: null,
+    score: 0
 };
 
 atg.updateLogo = function () {
     var borderOff = atg.dotBorder / 2,
-        canv = document.createElement('canvas');
+        canv = document.createElement('canvas'),
+        ctx,
+        sdi,
+        point;
 
     canv.width = atg.logoW;
     canv.height = atg.logoH;
-    var ctx = canv.getContext('2d');
-
-    atg.logoOffsetY = atg.h - canv.height - 48;
+    ctx = canv.getContext('2d');
 
     ctx.lineWidth = atg.dotBorder;
 
-    for (var i = 0; i < atg.scaledLogoDots.length; i++) {
-        var point = atg.scaledLogoDots[i];
+    for (sdi = 0; sdi < atg.scaledLogoDots.length; sdi += 1) {
+        point = atg.scaledLogoDots[sdi];
         if (point.h) {
             ctx.fillStyle = point.c;
         } else {
@@ -93,11 +98,12 @@ atg.drawUpdateLogo = function () {
     atg.updateLogo();
     atg.ctxMove.clearRect(0, 0, atg.w, atg.h);
     atg.ctxMove.drawImage(atg.logo, atg.logoOffsetX, atg.logoOffsetY);
-}
+};
 
-
-atg.startMove = function () {
+atg.startMove = function (e) {
     atg.touchStart = true;
+    atg.clientX = e.clientX;
+    atg.clientY = e.clientY;
 };
 
 atg.endMove = function () {
@@ -107,10 +113,16 @@ atg.endMove = function () {
 atg.moveLogo = function (e) {
     e.preventDefault();
     if (atg.touchStart) {
-        // todo: clear only last region
-        atg.ctxMove.clearRect(0, 0, atg.w, atg.h);
-        atg.logoOffsetX = ~~(e.clientX * atg.moveFactor) - atg.logo.width - 48;
+        var dx = e.clientX - atg.clientX,
+            dy = e.clientY - atg.clientY;
+        atg.ctxMove.clearRect(atg.logoOffsetX, atg.logoOffsetY, atg.logoW, atg.logoH);
+        atg.logoOffsetX = Math.min(atg.logoW + atg.w,
+            Math.max(-atg.logoW, Math.floor(dx * atg.touchSpeed) + atg.logoOffsetX));
+        atg.logoOffsetY = Math.min(atg.logoH + atg.h,
+            Math.max(-atg.logoH, Math.floor(dy * atg.touchSpeed) + atg.logoOffsetY));
         atg.ctxMove.drawImage(atg.logo, atg.logoOffsetX, atg.logoOffsetY);
+        atg.clientX = e.clientX;
+        atg.clientY = e.clientY;
     }
 };
 
@@ -122,73 +134,88 @@ atg.collision = function (p1x, p1y, r1, p2x, p2y, r2) {
 
     if (a * a > (x * x) + (y * y)) {
         return true;
-    } else {
-        return false;
     }
-}
+    return false;
+};
 
 atg.run = function (canvas, ctx) {
+    var runningDropIndex,
+        runningDrop,
+        scaledDropIndex,
+        scaledDrop,
+        scaledDropX,
+        scaledDropY;
 
     // remove old dots
-    var len = atg.runningDrops.length;
-    while (len--) {
-        var dd = atg.runningDrops[len];
-        if (dd.y > atg.h) {
-            atg.runningDrops.splice(len, 1)
+    runningDropIndex = atg.runningDrops.length;
+    while (runningDropIndex--) {
+        runningDrop = atg.runningDrops[runningDropIndex];
+        if (runningDrop.y > atg.h) {
+            atg.runningDrops.splice(runningDropIndex, 1);
         }
     }
 
     // check for collision
-    var runningDropIndex = atg.runningDrops.length;
+    runningDropIndex = atg.runningDrops.length;
     while (runningDropIndex--) {
-        var runningDrop = atg.runningDrops[runningDropIndex];
-        for (var scaledDropIndex = 0; scaledDropIndex < atg.scaledLogoDots.length; scaledDropIndex++) {
-            var scaledDrop = atg.scaledLogoDots[scaledDropIndex],
-                sdx = scaledDrop.x + atg.logoOffsetX + scaledDrop.r,
-                sdy = scaledDrop.y + atg.logoOffsetY + scaledDrop.r;
-            if (atg.collision(runningDrop.x, runningDrop.y, runningDrop.r, sdx, sdy, scaledDrop.r)) {
+        runningDrop = atg.runningDrops[runningDropIndex];
+        for (scaledDropIndex = 0; scaledDropIndex < atg.scaledLogoDots.length; scaledDropIndex++) {
+            scaledDrop = atg.scaledLogoDots[scaledDropIndex];
+            scaledDropX = scaledDrop.x + atg.logoOffsetX + scaledDrop.r;
+            scaledDropY = scaledDrop.y + atg.logoOffsetY + scaledDrop.r;
+            if (atg.collision(runningDrop.x, runningDrop.y, runningDrop.r, scaledDropX, scaledDropY, scaledDrop.r)) {
                 // check if color matches
                 if (scaledDrop.c === runningDrop.c) {
-                    scaledDrop.h = true;
-                    atg.drawUpdateLogo();
                     atg.runningDrops.splice(runningDropIndex, 1);
+                    if (!scaledDrop.h) {
+                        scaledDrop.h = true;
+                        atg.drawUpdateLogo();
+                        atg.score += 1;
+                    }
+                    if (atg.score === 10) {
+                        $('#info').text("Excellent!");
+                        $('#info').show();
+                    }
                 } else if (scaledDrop.h) {
                     scaledDrop.h = false;
                     atg.drawUpdateLogo();
                     atg.runningDrops.splice(runningDropIndex, 1);
+                    atg.score -= 1;
                 }
 
             }
         }
     }
 
-    // clear previous dots
+    // TODO: only clear dots
     ctx.clearRect(0, 0, atg.w, atg.h);
-    //for(var cd=0; cd < atg.runningDrops.length; cd++){
-    //    //ctx.clearRect(0, 0, atg.w, atg.h);
-    //}
 
     // move dots
-    for (var rd = 0; rd < atg.runningDrops.length; rd++) {
-        var dot = atg.runningDrops[rd];
-        dot.y += 0.8;
-        ctx.fillStyle = dot.c;
+    for (runningDropIndex = 0; runningDropIndex < atg.runningDrops.length; runningDropIndex++) {
+        runningDrop = atg.runningDrops[runningDropIndex];
+        runningDrop.y += runningDrop.s;
+        ctx.fillStyle = runningDrop.c;
         ctx.beginPath();
-        ctx.arc(dot.x, ~~dot.y, ~~(dot.r * atg.logoScale), 0, 2 * Math.PI, false);
+        ctx.arc(runningDrop.x, Math.floor(runningDrop.y), Math.floor(runningDrop.r * atg.logoScale), 0, 2 * Math.PI, false);
         ctx.fill();
     }
 
-    if (~~(Math.random() * (200 - atg.w * 0.08)) <= 0) {
-        var ds = atg.scaledLogoDots[~~(Math.random() * atg.scaledLogoDots.length)],
-            x = ds.r + 5 + Math.random() * (atg.w - 10 - ds.r * 2);
-        atg.runningDrops.push({x: ~~x, y: -20, r: ds.r, c: ds.c});
+    if (Math.floor(Math.random() * (220 - atg.w * 0.08)) <= 0) {
+        scaledDrop = atg.scaledLogoDots[Math.floor(Math.random() * atg.scaledLogoDots.length)];
+        scaledDropX = scaledDrop.r + 5 + Math.random() * (atg.w - 10 - scaledDrop.r * 2);
+        atg.runningDrops.push({
+            x: Math.floor(scaledDropX),
+            y: -20,
+            r: scaledDrop.r,
+            c: scaledDrop.c,
+            s: Math.random() * 0.5 + 0.4
+        });
     }
 
-    atg.loop = requestAnimationFrame(function () {
+    atg.loop = window.requestAnimationFrame(function () {
         atg.run(canvas, ctx);
     });
-}
-
+};
 
 $(document).ready(function () {
     atg.canMove = $('#move');
@@ -200,25 +227,34 @@ $(document).ready(function () {
         if (atg.loop) {
             window.cancelAnimationFrame(atg.loop);
         }
+        atg.score = 0;
         atg.w = $(window).width();
         atg.h = $(window).height();
-        var dotScale = atg.h * 0.33 / 560;
+        var dotScale = atg.h * 0.33 / 560,
+            logoDotIndex,
+            logoDot;
         atg.scaledLogoDots = [];
         // scale logo dots
-        for (var ld = 0; ld < atg.logoDots.length; ld++) {
-            var lDot = atg.logoDots[ld];
-            atg.scaledLogoDots.push({x: ~~(lDot.x * dotScale), y: ~~(lDot.y * dotScale), r: ~~(lDot.r * dotScale), c: lDot.c, h: false});
+        for (logoDotIndex = 0; logoDotIndex < atg.logoDots.length; logoDotIndex++) {
+            logoDot = atg.logoDots[logoDotIndex];
+            atg.scaledLogoDots.push({
+                x: Math.floor(logoDot.x * dotScale),
+                y: Math.floor(logoDot.y * dotScale),
+                r: Math.floor(logoDot.r * dotScale),
+                c: logoDot.c,
+                h: false
+            });
         }
 
-        atg.logoW = ~~(520 * dotScale) + atg.dotBorder;
-        atg.logoH = ~~(560 * dotScale) + atg.dotBorder;
+        atg.logoW = Math.floor(520 * dotScale) + atg.dotBorder;
+        atg.logoH = Math.floor(560 * dotScale) + atg.dotBorder;
 
         atg.updateLogo();
-        atg.moveFactor = (atg.w + atg.logo.width + 48) / atg.w;
         atg.canMove.attr('width', atg.w).attr('height', atg.h);
         atg.canDrop.attr('width', atg.w).attr('height', atg.h);
         atg.ctxMove.clearRect(0, 0, atg.w, atg.h);
-        atg.logoOffsetX = ~~(atg.w / 2.0) - ~~(atg.logo.width / 2.0);
+        atg.logoOffsetX = Math.floor(atg.w / 2.0) - Math.floor(atg.logo.width / 2.0);
+        atg.logoOffsetY = Math.floor(atg.h / 2.0) - Math.floor(atg.logo.height / 2.0);
         atg.drawUpdateLogo();
         atg.runningDrops = [];
         atg.run(atg.canDrop, atg.ctxDrop);
@@ -228,7 +264,7 @@ $(document).ready(function () {
 
     initGame();
 
-    var c = $("body").get(0);
+    var c = $('body').get(0);
     c.addEventListener('PointerDown', atg.startMove, false);
     c.addEventListener('PointerMove', atg.moveLogo, false);
     c.addEventListener('PointerUp', atg.endMove, false);

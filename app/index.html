@@ -22,14 +22,18 @@
         </div>
         <canvas id="move" width="320" height="200" style="position: absolute; z-index: 1"></canvas>
         <canvas id="drop" width="320" height="200" style="position: absolute; z-index: 2"></canvas>
+        <div id="info"></div>
 
         <!--[if lt IE 7]>
             <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
         <![endif]-->
 
+        <!-- build:js scripts/vendor/zepto.js -->
+        <script src="components/zepto/zepto.js"></script>
+        <!-- endbuild -->
+
         <!-- build:js scripts/main.js -->
-        <script src="components/jquery/jquery.js"></script>
-        <script src="components/hand-1.0.8.js"></script>
+        <script src="scripts/hand-1.0.10.js"></script>
         <script src="scripts/main.js"></script>
         <!-- endbuild -->
 </body>
