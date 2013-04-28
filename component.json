@@ -1,9 +1,11 @@
 {
-  "name": "atgame",
-  "version": "0.0.2",
-  "dependencies": {
-    "modernizr": "~2.6.2",
-    "zepto": "~1.0.0"
-  },
-  "devDependencies": {}
+    "name": "atgame",
+    "version": "0.0.2",
+    "dependencies": {
+        "sass-bootstrap": "~2.3.0",
+        "modernizr": "~2.6.2",
+        "zepto": "~1.0.0",
+        "zepto-cookie": "1d333556c530cc71f092df65c21cea95027fb7f9"
+    },
+    "devDependencies": {}
 }

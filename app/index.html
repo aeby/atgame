@@ -18,11 +18,39 @@
     </head>
     <body>
         <div class="gamebg">
-            <img src="images/bd.png" />
+            <!--<img src="images/bd.png" />-->
         </div>
         <canvas id="move" width="320" height="200" style="position: absolute; z-index: 1"></canvas>
         <canvas id="drop" width="320" height="200" style="position: absolute; z-index: 2"></canvas>
-        <div id="info"></div>
+        <button class="btn btn-small btn-info pause" type="button"><i class="icon-pause icon-white"></i></button>
+        <nav>
+            <section class="home">
+                <header>
+                    <h1>catch</h1>
+                    <h3>the</h3>
+                    <h1>dots</h1>
+                </header>
+                <p>
+                    <button class="btn btn-large btn-info play">Play</button>
+                </p>
+            </section>
+            <section class="menu">
+                <p>
+                    <button class="btn btn-large btn-info resume">Resume</button>
+                </p>
+                <p>
+                    <button class="btn btn-large btn-warning play">Restart</button>
+                </p>
+            </section>
+            <section class="win">
+                <header>
+                    <h1>Excellent!</h1>
+                </header>
+                <p>
+                    <button class="btn btn-large btn-info play">Play again</button>
+                </p>
+            </section>
+        </nav>
 
         <!--[if lt IE 7]>
             <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
@@ -33,6 +61,7 @@
         <!-- endbuild -->
 
         <!-- build:js scripts/main.js -->
+        <script src="components/zepto-cookie/zepto.cookie.js"></script>
         <script src="scripts/hand-1.0.10.js"></script>
         <script src="scripts/main.js"></script>
         <!-- endbuild -->
